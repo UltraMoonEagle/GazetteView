@@ -546,14 +546,19 @@ header .spacer { flex: 1; }
     <input type="password" id="apiKeyInput" placeholder="sk-or-v1-…" autocomplete="off">
 
     <label style="display:block;margin-top:14px;font-size:12px;color:var(--ink2);margin-bottom:6px;font-family:var(--mono);letter-spacing:.3px">MODEL</label>
-    <select id="modelSelect" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;font-family:var(--mono);background:var(--surface);color:var(--ink);outline:none;cursor:pointer">
-      <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 8B · Free ⚡ Fastest</option>
-      <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B · Free · Smarter</option>
-      <option value="google/gemma-2-9b-it:free">Gemma 2 9B · Free</option>
-      <option value="mistralai/mistral-7b-instruct:free">Mistral 7B · Free</option>
-      <option value="deepseek/deepseek-r1:free">DeepSeek R1 · Free · Best reasoning (slow)</option>
-      <option value="microsoft/phi-3-mini-128k-instruct:free">Phi-3 Mini · Free · Lightweight</option>
+    <select id="modelSelect" onchange="document.getElementById('customModel').value=''" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;font-family:var(--mono);background:var(--surface);color:var(--ink);outline:none;cursor:pointer">
+      <option value="openai/gpt-oss-120b:free">GPT OSS 120B &middot; Free &middot; Recommended</option>
+      <option value="google/gemma-3-12b-it:free">Gemma 3 12B &middot; Free</option>
+      <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B &middot; Free &middot; Smarter</option>
+      <option value="qwen/qwen3-8b:free">Qwen3 8B &middot; Free &middot; Fast</option>
+      <option value="mistralai/mistral-7b-instruct:free">Mistral 7B &middot; Free</option>
+      <option value="deepseek/deepseek-r1:free">DeepSeek R1 &middot; Free &middot; Best reasoning (slow)</option>
+      <option value="google/gemma-2-9b-it:free">Gemma 2 9B &middot; Free</option>
+      <option value="microsoft/phi-3-mini-128k-instruct:free">Phi-3 Mini &middot; Free &middot; Lightweight</option>
     </select>
+    <input type="text" id="customModel" placeholder="Or paste any slug: provider/model-name:free"
+      style="margin-top:6px;width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px;font-family:var(--mono);background:var(--surface);color:var(--ink);outline:none"
+      oninput="if(this.value.trim())document.getElementById('modelSelect').value=''">
 
     <div class="modal-btns">
       <button class="modal-save" onclick="saveApiKey()">Save &amp; Enable Chat</button>
@@ -573,7 +578,7 @@ let selectedForm = null;
 let chatHistory = [];
 let files = [];
 let apiKey = '';
-let selectedModel = 'meta-llama/llama-3.1-8b-instruct:free';
+let selectedModel = 'openai/gpt-oss-120b:free';
 let activeTab = 'pdf';
 let msgId = 0;
 
@@ -599,7 +604,11 @@ const LS_CACHE   = 'gv_ai_cache_v1'; // AI answer cache
 // ── API KEY MODAL ──────────────────────────────────────────────────────────────
 function openApiModal() {
   document.getElementById('apiKeyInput').value = apiKey;
-  document.getElementById('modelSelect').value = selectedModel;
+  // Populate custom field if selectedModel isn't in the dropdown
+  const select = document.getElementById('modelSelect');
+  const inList = [...select.options].some(o => o.value === selectedModel);
+  if (inList) { select.value = selectedModel; document.getElementById('customModel').value = ''; }
+  else { select.value = ''; document.getElementById('customModel').value = selectedModel; }
   document.getElementById('apiModal').classList.add('open');
   setTimeout(() => document.getElementById('apiKeyInput').focus(), 100);
 }
@@ -608,7 +617,8 @@ function closeApiModal() {
 }
 function saveApiKey() {
   apiKey = document.getElementById('apiKeyInput').value.trim();
-  selectedModel = document.getElementById('modelSelect').value;
+  const custom = document.getElementById('customModel').value.trim();
+  selectedModel = custom || document.getElementById('modelSelect').value;
   closeApiModal();
   updateApiStatus();
 }
