@@ -715,23 +715,34 @@ async function parsePDFs() {
 async function extractPDFText(file) {
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-  let text = '';
+  let fullText = '';
+
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
-    // Group items by approximate Y position to reconstruct lines
     const items = content.items;
-    const lineMap = {};
+
+    // Group text items by Y coordinate (rounded to 2px tolerance)
+    // PDF Y=0 is bottom of page, so higher Y = higher on page
+    const buckets = new Map();
     for (const item of items) {
-      const y = Math.round(item.transform[5]);
-      if (!lineMap[y]) lineMap[y] = [];
-      lineMap[y].push(item.str);
+      if (!item.str.trim()) continue;
+      const y = Math.round(item.transform[5] / 2) * 2; // 2px bucket
+      if (!buckets.has(y)) buckets.set(y, []);
+      // Sort by X within each line bucket
+      buckets.get(y).push({ x: item.transform[4], str: item.str });
     }
-    const sortedYs = Object.keys(lineMap).map(Number).sort((a, b) => b - a);
-    for (const y of sortedYs) text += lineMap[y].join(' ') + '\n';
-    text += '\n';
+
+    // Sort lines top-to-bottom (descending Y in PDF coords)
+    const sortedYs = [...buckets.keys()].sort((a, b) => b - a);
+    for (const y of sortedYs) {
+      const lineItems = buckets.get(y).sort((a, b) => a.x - b.x);
+      const lineText = lineItems.map(i => i.str).join(' ').trim();
+      if (lineText) fullText += lineText + '\n';
+    }
+    fullText += '\n'; // blank line between pages
   }
-  return text;
+  return fullText;
 }
 
 // ── TEXT PASTE PARSING ─────────────────────────────────────────────────────────
@@ -743,89 +754,82 @@ function parsePastedText() {
 }
 
 // ── CORE PARSER ────────────────────────────────────────────────────────────────
-// Handles both clean patterns and PDF-extracted (possibly joined) text.
-function parseFormsFromText(text, sourceName) {
+function parseFormsFromText(rawText, sourceName) {
   const forms = [];
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  let i = 0;
 
+  // Collapse horizontal whitespace, keep newlines
+  const text = rawText.replace(/[ \t]+/g, ' ');
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  // Matches: FORM-I / FORM I / FORM-XIV / FORM XIV / FORM-I-A (alone on line)
+  const FORM_RE = /^FORM\s*[-\u2013\u2014]?\s*([IVXLCDM]+(?:\s*[-\u2013][A-Z])?)\s*$/i;
+  // Matches: (See rule 3(1)) / [See rules 3 and 4] / See rule 10(2)(i)
+  const RULE_RE = /[\[\(]?\s*[Ss]ee\s+[Rr]ules?\s+([^\]\)\n]{1,160})[\]\)]?/;
+  // Skip these lines when looking for the description
+  const SKIP_RE = /^(FORM\s|[\[\(]?See\s+[Rr]ule|THE GAZETTE|PART[\s\[]|\[PART|MINISTRY|CHAPTER|DEPARTMENT|NOTIFICATION|ANNEXURE|SCHEDULE)/i;
+
+  let i = 0;
   while (i < lines.length) {
     const line = lines[i];
+    const fm = line.match(FORM_RE);
+    if (!fm) { i++; continue; }
 
-    // Match FORM-I, FORM II, FORM-XXVII, FORM-I-A, etc.
-    const formMatch = line.match(/^FORM[\s\-–—]*([IVXLCDM]+(?:[-–][A-Z])?)\s*$/i);
-    // Also try lines that start with FORM followed by number (short lines)
-    const formMatchInline = !formMatch && line.match(/^FORM[\s\-–—]*([IVXLCDM]+(?:[-–][A-Z])?)\b/i) && line.length < 30
-      ? line.match(/^FORM[\s\-–—]*([IVXLCDM]+(?:[-–][A-Z])?)\b/i)
-      : null;
+    const numStr = fm[1].toUpperCase()
+      .replace(/\s*[-\u2013\u2014]\s*/g, '-')
+      .replace(/\s+/g, '');
+    const number = 'FORM-' + numStr;
 
-    const match = formMatch || formMatchInline;
+    const ruleRefs = [];  // collect ALL rule references
+    let description = '';
+    let j = i + 1;
 
-    if (match) {
-      const numStr = match[1].toUpperCase().replace(/[\s–—]+/g, '-');
-      const number = 'FORM-' + numStr;
-      let rule = '', description = '';
-      let contextLines = [line];
-      let j = i + 1;
 
-      // Scan ahead up to 10 lines for rule reference and description
-      while (j < Math.min(i + 12, lines.length)) {
-        const next = lines[j];
-        contextLines.push(next);
+    while (j < Math.min(i + 15, lines.length)) {
+      const next = lines[j];
 
-        // Rule pattern: (See rule 3(1)) or [See rules 3(1) and 4(2)] etc.
-        if (!rule) {
-          const rm = next.match(/[\[\(]?\s*[Ss]ee\s+[Rr]ules?\s+([^)\]]{1,140})[\]\)]?/);
-          if (rm) {
-            rule = rm[1].trim().replace(/[\[\]()]/g, '').replace(/\s+/g, ' ');
-          }
-        }
-
-        // Description: a meaningful line that isn't a form/rule/header
-        if (!description && next.length > 15) {
-          const isHeader = /^FORM[\s\-–—]/i.test(next)
-            || /^See\s+[Rr]ule/i.test(next)
-            || /^\[?[Ss]ee\s/i.test(next)
-            || /^THE GAZETTE/i.test(next)
-            || /^PART\s/i.test(next)
-            || /^\[PART/i.test(next)
-            || /^MINISTRY/i.test(next)
-            || /^CHAPTER/i.test(next)
-            || /^\d+\.\s/i.test(next);
-          if (!isHeader) {
-            description = next.replace(/^[\[\(]|[\]\)]$/g, '').trim();
-          }
-        }
-
-        if (rule && description) break;
+      // Keep collecting rule refs — a form may reference several rules
+      const rm = next.match(RULE_RE);
+      if (rm) {
+        ruleRefs.push(
+          rm[1].replace(/[\[\]()]/g, '').replace(/\s+/g, ' ').trim().replace(/[.,;]+$/, '')
+        );
         j++;
+        continue;
       }
 
-      // Grab more context (up to 40 lines)
-      const fullContext = lines.slice(i, Math.min(i + 40, lines.length)).join('\n');
+      // Once rule lines are exhausted, grab the first substantive description line
+      if (!description && next.length > 10 && !SKIP_RE.test(next)) {
+        description = next.replace(/^[\[\(]+|[\]\)]+$/g, '').trim();
+        j++;
+        break;
+      }
 
-      forms.push({
-        number,
-        rule: rule || '',
-        description: description || '',
-        sortKey: romanToInt(numStr.split('-')[0]),
-        context: fullContext,
-        source: sourceName
-      });
-
-      i = j;
-    } else {
-      i++;
+      j++;
     }
+
+    const rule = ruleRefs.join(' and ');
+
+
+    forms.push({
+      number,
+      rule:        rule || '',
+      description: description || '',
+      sortKey:     romanToInt(numStr.split('-')[0]),
+      context:     lines.slice(i, Math.min(i + 50, lines.length)).join('\n'),
+      source:      sourceName
+    });
+
+    i = j;
   }
 
-  // Deduplicate within this source
   const seen = new Set();
   return forms.filter(f => {
     if (seen.has(f.number)) return false;
-    seen.add(f.number); return true;
+    seen.add(f.number);
+    return true;
   });
 }
+
 
 function romanToInt(s) {
   const vals = { I:1, V:5, X:10, L:50, C:100, D:500, M:1000 };
@@ -1103,7 +1107,7 @@ Answer concisely and accurately. Use plain, professional language. If you quote 
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
         'HTTP-Referer': window.location.href,
-        'X-Title': 'GazetteView — OSH Forms Index'
+        'X-Title': 'GazetteView - OSH Forms Index'
       },
       body: JSON.stringify({
         model: selectedModel,
