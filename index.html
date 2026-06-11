@@ -577,6 +577,25 @@ let selectedModel = 'meta-llama/llama-3.1-8b-instruct:free';
 let activeTab = 'pdf';
 let msgId = 0;
 
+// ── LOCALSTORAGE KEYS ──────────────────────────────────────────────────────────
+const LS_FORMS   = 'gv_forms_v1';   // parsed form index
+const LS_CACHE   = 'gv_ai_cache_v1'; // AI answer cache
+
+// ── BOOT: load saved forms on page load ────────────────────────────────────────
+(function bootLoad() {
+  try {
+    const saved = localStorage.getItem(LS_FORMS);
+    if (saved) {
+      allForms = JSON.parse(saved);
+      if (allForms.length) {
+        document.getElementById('searchInput').disabled = false;
+        renderFormIndex(allForms);
+        renderCacheFooter();
+      }
+    }
+  } catch(e) { /* ignore corrupt storage */ }
+})();
+
 // ── API KEY MODAL ──────────────────────────────────────────────────────────────
 function openApiModal() {
   document.getElementById('apiKeyInput').value = apiKey;
@@ -828,8 +847,75 @@ function finalizeForms() {
     seen.add(f.number); return true;
   });
   allForms.sort((a, b) => a.sortKey - b.sortKey || a.number.localeCompare(b.number));
+
+  // Persist to localStorage — survives page refresh
+  try { localStorage.setItem(LS_FORMS, JSON.stringify(allForms)); } catch(e) {}
+
   document.getElementById('searchInput').disabled = false;
   renderFormIndex(allForms);
+  renderCacheFooter();
+}
+
+// ── CACHE FOOTER ───────────────────────────────────────────────────────────────
+function renderCacheFooter() {
+  let footer = document.getElementById('cacheFooter');
+  if (!footer) {
+    footer = document.createElement('div');
+    footer.id = 'cacheFooter';
+    footer.style.cssText = [
+      'padding:10px 14px',
+      'border-top:1px solid var(--border)',
+      'font-size:11px',
+      'font-family:var(--mono)',
+      'color:var(--ink3)',
+      'display:flex',
+      'align-items:center',
+      'gap:8px',
+      'flex-shrink:0'
+    ].join(';');
+    document.querySelector('.left-panel').appendChild(footer);
+  }
+  const formCount  = allForms.length;
+  let   cacheCount = 0;
+  try {
+    const c = JSON.parse(localStorage.getItem(LS_CACHE) || '{}');
+    cacheCount = Object.keys(c).length;
+  } catch(e) {}
+
+  footer.innerHTML = `
+    <span style="flex:1">
+      💾 ${formCount} forms saved &nbsp;·&nbsp; 🗃️ ${cacheCount} answers cached
+    </span>
+    <button onclick="clearAllData()" style="
+      border:1px solid var(--border);border-radius:4px;
+      background:transparent;color:var(--ink3);font-size:10px;
+      font-family:var(--mono);padding:3px 8px;cursor:pointer;
+      transition:color .15s,border-color .15s
+    " onmouseover="this.style.color='var(--err-c)';this.style.borderColor='var(--err-c)'"
+       onmouseout="this.style.color='var(--ink3)';this.style.borderColor='var(--border)'"
+    >Clear all</button>
+  `;
+}
+
+function clearAllData() {
+  if (!confirm('Clear all saved forms and cached AI answers?')) return;
+  localStorage.removeItem(LS_FORMS);
+  localStorage.removeItem(LS_CACHE);
+  allForms = []; selectedForm = null; files = [];
+  document.getElementById('searchInput').disabled = true;
+  document.getElementById('searchInput').value = '';
+  document.getElementById('parseBtn').disabled = true;
+  document.getElementById('fileList').innerHTML = '';
+  document.getElementById('formIndex').innerHTML =
+    '<div class="form-index-empty"><div class="hint-icon">📋</div>Upload PDFs or paste text, then click<br><strong>Extract all forms</strong> to begin</div>';
+  document.getElementById('rightPanel').innerHTML = `
+    <div class="welcome-state">
+      <div class="w-icon">🏛️</div>
+      <h2>Select a form to explore</h2>
+      <p>Import the Gazette PDFs or paste extracted text. All statutory forms will be indexed and searchable.</p>
+    </div>`;
+  const footer = document.getElementById('cacheFooter');
+  if (footer) footer.remove();
 }
 
 // ── FORM INDEX RENDER ──────────────────────────────────────────────────────────
@@ -839,10 +925,11 @@ function renderFormIndex(forms) {
     el.innerHTML = '<div class="form-index-empty"><div class="hint-icon">🔍</div>No forms matched your search</div>';
     return;
   }
+  const fromStorage = files.length === 0;
   el.innerHTML = `
     <div class="stats-bar">
       <span>${forms.length} form${forms.length !== 1 ? 's' : ''} indexed</span>
-      <span>${files.length} PDF${files.length !== 1 ? 's' : ''}</span>
+      <span>${fromStorage ? '💾 from cache' : files.length + ' PDF' + (files.length !== 1 ? 's' : '')}</span>
     </div>
     ${forms.map(f => `
       <div class="form-entry ${selectedForm?.number === f.number ? 'active' : ''}"
@@ -903,7 +990,7 @@ function selectForm(formNumber) {
 
       ${!hasKey ? `
         <div class="no-key-notice">
-          ⚠️ No API key set — <button onclick="openApiModal()" style="background:none;border:none;cursor:pointer;color:inherit;text-decoration:underline;font-size:inherit">click here</button> to add your Claude key and enable Q&amp;A.
+          ⚠️ No API key set — <button onclick="openApiModal()" style="background:none;border:none;cursor:pointer;color:inherit;text-decoration:underline;font-size:inherit">click here</button> to add your OpenRouter key and enable Q&amp;A.
         </div>
       ` : ''}
 
@@ -933,6 +1020,26 @@ function askChip(q) {
   sendMessage();
 }
 
+// ── AI CACHE HELPERS ───────────────────────────────────────────────────────────
+function cacheKey(formNumber, question) {
+  // Normalize: lowercase, collapse whitespace → stable key
+  return formNumber + '||' + question.toLowerCase().replace(/\s+/g,' ').trim();
+}
+function getCached(formNumber, question) {
+  try {
+    const store = JSON.parse(localStorage.getItem(LS_CACHE) || '{}');
+    return store[cacheKey(formNumber, question)] || null;
+  } catch(e) { return null; }
+}
+function setCached(formNumber, question, answer) {
+  try {
+    const store = JSON.parse(localStorage.getItem(LS_CACHE) || '{}');
+    store[cacheKey(formNumber, question)] = answer;
+    localStorage.setItem(LS_CACHE, JSON.stringify(store));
+    renderCacheFooter(); // update count
+  } catch(e) { /* storage full — skip silently */ }
+}
+
 // ── AI CHAT ────────────────────────────────────────────────────────────────────
 async function sendMessage() {
   const input = document.getElementById('chatInput');
@@ -946,14 +1053,35 @@ async function sendMessage() {
   if (chips) chips.style.display = 'none';
 
   appendMsg('user', escHtml(q));
+  chatHistory.push({ role: 'user', content: q });
 
+  // ── CHECK CACHE FIRST ──────────────────────────────────────────────────────
+  const cached = getCached(selectedForm.number, q);
+  if (cached) {
+    const html = formatMarkdown(cached);
+    const id = appendMsg('assistant', html);
+    // Add a subtle "from cache" badge
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) {
+        const badge = document.createElement('div');
+        badge.style.cssText = 'font-size:10px;font-family:var(--mono);color:var(--ink3);margin-top:5px;padding-left:2px';
+        badge.textContent = '⚡ answered from cache — no API call made';
+        el.querySelector('.msg-bubble').appendChild(badge);
+      }
+    }, 50);
+    chatHistory.push({ role: 'assistant', content: cached });
+    const sendBtn = document.getElementById('sendBtn');
+    if (sendBtn) sendBtn.disabled = false;
+    return;
+  }
+
+  // ── CALL OPENROUTER ────────────────────────────────────────────────────────
   const thinkingId = appendMsg('assistant', `
     <div class="thinking">
       <div class="thinking-dots"><span></span><span></span><span></span></div>
       Consulting…
     </div>`);
-
-  chatHistory.push({ role: 'user', content: q });
 
   const systemPrompt = `You are a precise legal assistant specialising in Indian labour law — specifically the Occupational Safety, Health and Working Conditions (Central) Rules, 2026 (notified under the OSH Code, 2020).
 
@@ -969,7 +1097,6 @@ ${selectedForm.context}
 Answer concisely and accurately. Use plain, professional language. If you quote rule numbers, be precise. If information is not in the context, say so and draw on your knowledge of the OSH Code 2020 framework. Use bullet points or numbered lists where helpful. Do not add fictional content.`;
 
   try {
-    // OpenRouter — OpenAI-compatible endpoint, free models, CORS allowed
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -996,6 +1123,7 @@ Answer concisely and accurately. Use plain, professional language. If you quote 
     const data = await res.json();
     const answer = data.choices?.[0]?.message?.content || 'No response received.';
     chatHistory.push({ role: 'assistant', content: answer });
+    setCached(selectedForm.number, q, answer); // 💾 save for next time
     updateMsg(thinkingId, formatMarkdown(answer));
   } catch (e) {
     updateMsg(thinkingId, `<span style="color:var(--err-c)">⚠ ${escHtml(e.message || 'Request failed. Check your OpenRouter key.')}</span>`);
