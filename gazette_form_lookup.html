@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GazetteView — OSH Forms Index</title>
+<meta name="description" content="Search and explore all statutory forms from the Occupational Safety, Health and Working Conditions (Central) Rules, 2026 Gazette.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root {
+  --ink:        #1c1c20;
+  --ink2:       #52525e;
+  --ink3:       #9898a6;
+  --paper:      #f9f9fb;
+  --surface:    #f1f1f5;
+  --surface2:   #e8e8ee;
+  --border:     #dcdce8;
+  --accent:     #3b5bdb;
+  --accent-h:   #2f4ac2;
+  --accent-lt:  #eef2ff;
+  --rule-c:     #7048e8;
+  --rule-bg:    #f3f0ff;
+  --ok:         #2f9e44;
+  --ok-bg:      #ebfbee;
+  --warn:       #e67700;
+  --warn-bg:    #fff4e6;
+  --err-bg:     #fff5f5;
+  --err-c:      #c92a2a;
+  --sans:       'Inter', system-ui, sans-serif;
+  --serif:      'Lora', Georgia, serif;
+  --mono:       'JetBrains Mono', 'Courier New', monospace;
+  --radius:     8px;
+  --shadow:     0 2px 12px rgba(0,0,0,.08);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,.12);
+  --transition: 0.18s cubic-bezier(.4,0,.2,1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink:       #e4e4ec;
+    --ink2:      #a0a0b4;
+    --ink3:      #60607a;
+    --paper:     #13131a;
+    --surface:   #1c1c26;
+    --surface2:  #242430;
+    --border:    #2e2e3e;
+    --accent:    #748ffc;
+    --accent-h:  #91a7ff;
+    --accent-lt: #1a1f3d;
+    --rule-c:    #b197fc;
+    --rule-bg:   #1e1730;
+    --ok:        #69db7c;
+    --ok-bg:     #0d2112;
+    --warn:      #fcc419;
+    --warn-bg:   #1e1700;
+    --err-bg:    #1e0a0a;
+    --err-c:     #ff8787;
+    --shadow:    0 2px 12px rgba(0,0,0,.4);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,.5);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+body {
+  font-family: var(--sans);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow: hidden;
+}
+
+/* ── HEADER ─────────────────────────────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  height: 52px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  z-index: 10;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.logo-icon {
+  width: 28px; height: 28px;
+  background: var(--accent);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--serif);
+  flex-shrink: 0;
+}
+.logo-text { font-size: 15px; font-weight: 600; letter-spacing: -.3px; }
+.logo-sub {
+  font-size: 11px; color: var(--ink3); font-family: var(--mono);
+  padding-left: 12px; border-left: 1px solid var(--border);
+  margin-left: 4px;
+  letter-spacing: .3px;
+}
+header .spacer { flex: 1; }
+.header-api {
+  display: flex; align-items: center; gap: 8px;
+}
+.api-status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border);
+  transition: background var(--transition);
+}
+.api-status-dot.ready { background: var(--ok); }
+.api-key-btn {
+  font-size: 12px; font-family: var(--mono);
+  border: 1px solid var(--border); border-radius: 5px;
+  background: var(--surface); color: var(--ink2);
+  padding: 4px 10px; cursor: pointer;
+  transition: all var(--transition);
+}
+.api-key-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── LAYOUT ─────────────────────────────────────────────────────────────── */
+.layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: calc(100vh - 52px);
+}
+
+/* ── LEFT PANEL ─────────────────────────────────────────────────────────── */
+.left-panel {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* Import zone */
+.import-zone { padding: 16px; border-bottom: 1px solid var(--border); }
+.import-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.tab-btn {
+  flex: 1; padding: 6px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--paper); color: var(--ink2); font-size: 12px;
+  font-family: var(--mono); cursor: pointer; transition: all var(--transition);
+}
+.tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* Drop area */
+.drop-area {
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 16px 12px; text-align: center; cursor: pointer;
+  transition: all var(--transition);
+  background: var(--paper);
+}
+.drop-area:hover, .drop-area.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-lt);
+}
+.drop-area input { display: none; }
+.drop-icon { font-size: 22px; margin-bottom: 4px; opacity: .55; }
+.drop-area p { font-size: 12px; color: var(--ink2); }
+.drop-area strong { color: var(--accent); }
+
+/* Paste area */
+.paste-area { display: none; }
+.paste-area textarea {
+  width: 100%; border: 1.5px solid var(--border); border-radius: var(--radius);
+  padding: 10px 12px; font-size: 12px; font-family: var(--mono);
+  background: var(--paper); color: var(--ink); resize: none;
+  height: 110px; outline: none; line-height: 1.5;
+  transition: border-color var(--transition);
+}
+.paste-area textarea:focus { border-color: var(--accent); }
+.paste-area textarea::placeholder { color: var(--ink3); }
+
+/* File list */
+.file-list { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; }
+.file-item {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--paper); border: 1px solid var(--border);
+  border-radius: 5px; padding: 6px 10px; font-size: 11px;
+}
+.file-item .fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
+.fstatus {
+  font-family: var(--mono); font-size: 10px; padding: 2px 6px;
+  border-radius: 3px; white-space: nowrap;
+}
+.fstatus.ready  { background: var(--surface2); color: var(--ink3); }
+.fstatus.loading{ background: var(--accent-lt); color: var(--accent); }
+.fstatus.done   { background: var(--ok-bg); color: var(--ok); }
+.fstatus.error  { background: var(--err-bg); color: var(--err-c); }
+
+.parse-btn {
+  margin-top: 10px; width: 100%;
+  background: var(--accent); color: #fff; border: none;
+  border-radius: var(--radius); padding: 9px; font-size: 13px; font-weight: 500;
+  font-family: var(--sans); cursor: pointer; transition: all var(--transition);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.parse-btn:hover:not(:disabled) { background: var(--accent-h); transform: translateY(-1px); box-shadow: var(--shadow); }
+.parse-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Search */
+.search-wrap {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.search-wrap input {
+  width: 100%; border: 1px solid var(--border); border-radius: 6px;
+  padding: 7px 10px 7px 32px; font-size: 13px;
+  background: var(--paper); color: var(--ink); outline: none;
+  transition: border-color var(--transition); font-family: var(--sans);
+}
+.search-wrap input:focus { border-color: var(--accent); }
+.search-icon {
+  position: absolute; left: 22px; top: 50%; transform: translateY(-50%);
+  color: var(--ink3); font-size: 14px; pointer-events: none;
+}
+
+/* Stats bar */
+.stats-bar {
+  padding: 5px 14px; background: var(--accent-lt);
+  border-bottom: 1px solid var(--border);
+  font-size: 10.5px; font-family: var(--mono); color: var(--accent);
+  display: flex; gap: 14px; align-items: center;
+}
+
+/* Form index list */
+.form-index { flex: 1; overflow-y: auto; padding: 4px 0; }
+.form-index-empty {
+  padding: 32px 16px; color: var(--ink3); font-size: 13px;
+  text-align: center; line-height: 1.8;
+}
+.form-index-empty .hint-icon { font-size: 28px; margin-bottom: 8px; opacity: .4; }
+
+.form-entry {
+  padding: 9px 14px; cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background var(--transition);
+  position: relative;
+}
+.form-entry:hover { background: var(--paper); }
+.form-entry.active {
+  border-left-color: var(--accent);
+  background: var(--paper);
+}
+.form-entry .form-num {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--accent); font-weight: 500; letter-spacing: .2px;
+}
+.form-entry .form-rule {
+  font-size: 10px; color: var(--rule-c); font-family: var(--mono);
+  margin: 1px 0;
+}
+.form-entry .form-title {
+  font-size: 12px; color: var(--ink2); line-height: 1.4; margin-top: 2px;
+  overflow: hidden; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+
+/* Scrollbar */
+.form-index::-webkit-scrollbar { width: 4px; }
+.form-index::-webkit-scrollbar-track { background: transparent; }
+.form-index::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── RIGHT PANEL ────────────────────────────────────────────────────────── */
+.right-panel { display: flex; flex-direction: column; overflow: hidden; }
+
+/* Empty state */
+.welcome-state {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 12px; padding: 40px;
+  text-align: center;
+}
+.welcome-state .w-icon { font-size: 48px; opacity: .2; }
+.welcome-state h2 {
+  font-family: var(--serif); font-weight: 400;
+  font-size: 20px; color: var(--ink2);
+}
+.welcome-state p { font-size: 13px; color: var(--ink3); max-width: 320px; }
+
+/* Detail header */
+.detail-header {
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--paper);
+  flex-shrink: 0;
+}
+.form-badge {
+  display: inline-flex; align-items: center;
+  font-family: var(--mono); font-size: 12px;
+  background: var(--accent); color: #fff;
+  padding: 3px 10px; border-radius: 5px; margin-bottom: 8px;
+}
+.detail-header h2 {
+  font-family: var(--serif); font-size: 18px;
+  font-weight: 400; line-height: 1.35; color: var(--ink);
+}
+.rule-tag {
+  margin-top: 6px; display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-family: var(--mono);
+  color: var(--rule-c); background: var(--rule-bg);
+  padding: 3px 10px; border-radius: 4px;
+}
+.source-tag {
+  margin-top: 4px; margin-left: 6px;
+  display: inline-block; font-size: 10px; font-family: var(--mono);
+  color: var(--ink3); background: var(--surface2);
+  padding: 2px 7px; border-radius: 3px;
+}
+
+/* Chat */
+.ai-chat { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.messages {
+  flex: 1; overflow-y: auto; padding: 20px 24px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.messages::-webkit-scrollbar { width: 4px; }
+.messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.msg { max-width: 85%; }
+.msg.user { align-self: flex-end; }
+.msg.assistant { align-self: flex-start; }
+.msg-label {
+  font-size: 10.5px; color: var(--ink3); margin-bottom: 3px;
+  font-family: var(--mono); letter-spacing: .3px;
+}
+.msg.user .msg-label { text-align: right; }
+.msg-bubble {
+  padding: 10px 14px; border-radius: var(--radius); font-size: 13.5px; line-height: 1.65;
+}
+.msg.user .msg-bubble {
+  background: var(--accent); color: #fff;
+  border-bottom-right-radius: 2px;
+}
+.msg.assistant .msg-bubble {
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--ink); border-bottom-left-radius: 2px;
+}
+.msg.assistant .msg-bubble strong { color: var(--accent); }
+.msg.assistant .msg-bubble p + p { margin-top: 8px; }
+.msg.assistant .msg-bubble ul, .msg.assistant .msg-bubble ol { padding-left: 20px; margin-top: 6px; }
+.msg.assistant .msg-bubble li { margin-bottom: 4px; }
+.msg.assistant .msg-bubble code {
+  font-family: var(--mono); font-size: 12px;
+  background: var(--surface2); padding: 1px 5px; border-radius: 3px;
+}
+
+.thinking {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--ink3); font-style: italic; font-size: 13px;
+}
+.thinking-dots { display: flex; gap: 4px; }
+.thinking-dots span {
+  width: 5px; height: 5px; background: var(--ink3);
+  border-radius: 50%; animation: blink 1.2s infinite;
+}
+.thinking-dots span:nth-child(2) { animation-delay: .2s; }
+.thinking-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+
+/* Chips */
+.suggestion-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0 24px 12px;
+}
+.chip {
+  border: 1px solid var(--border); border-radius: 20px;
+  padding: 5px 12px; font-size: 12px; color: var(--ink2);
+  cursor: pointer; background: var(--paper);
+  transition: all var(--transition);
+}
+.chip:hover {
+  border-color: var(--accent); color: var(--accent);
+  background: var(--accent-lt); transform: translateY(-1px);
+}
+
+/* Chat input */
+.chat-input-row {
+  padding: 12px 24px 16px; border-top: 1px solid var(--border);
+  display: flex; gap: 10px; align-items: flex-end;
+  background: var(--paper);
+}
+.chat-input-row textarea {
+  flex: 1; border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 9px 12px; font-size: 13.5px; font-family: var(--sans);
+  background: var(--paper); color: var(--ink); resize: none;
+  min-height: 42px; max-height: 120px; line-height: 1.5; outline: none;
+  transition: border-color var(--transition);
+}
+.chat-input-row textarea:focus { border-color: var(--accent); }
+.send-btn {
+  background: var(--accent); color: #fff; border: none;
+  border-radius: var(--radius); padding: 0 18px; font-size: 13px;
+  font-weight: 500; font-family: var(--sans);
+  cursor: pointer; transition: all var(--transition);
+  height: 42px; white-space: nowrap; flex-shrink: 0;
+}
+.send-btn:hover:not(:disabled) { background: var(--accent-h); transform: translateY(-1px); }
+.send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* No-key notice */
+.no-key-notice {
+  background: var(--warn-bg); border: 1px solid var(--warn);
+  border-radius: var(--radius); padding: 10px 14px; margin: 12px 24px;
+  font-size: 12px; color: var(--warn); display: flex; align-items: center; gap: 8px;
+}
+
+/* API Key Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; backdrop-filter: blur(4px);
+  opacity: 0; pointer-events: none; transition: opacity var(--transition);
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--paper); border: 1px solid var(--border);
+  border-radius: 12px; padding: 28px; width: min(460px, 94vw);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(10px); transition: transform var(--transition);
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+.modal h3 { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+.modal p { font-size: 13px; color: var(--ink2); margin-bottom: 16px; line-height: 1.6; }
+.modal input {
+  width: 100%; border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px 12px; font-size: 13px; font-family: var(--mono);
+  background: var(--surface); color: var(--ink); outline: none;
+  transition: border-color var(--transition);
+}
+.modal input:focus { border-color: var(--accent); }
+.modal-btns { display: flex; gap: 10px; margin-top: 14px; }
+.modal-save {
+  flex: 1; background: var(--accent); color: #fff; border: none;
+  border-radius: 6px; padding: 9px; font-size: 13px; font-weight: 500;
+  font-family: var(--sans); cursor: pointer; transition: opacity var(--transition);
+}
+.modal-save:hover { opacity: .88; }
+.modal-cancel {
+  border: 1px solid var(--border); border-radius: 6px; padding: 9px 16px;
+  background: transparent; color: var(--ink2); font-size: 13px;
+  cursor: pointer; transition: all var(--transition); font-family: var(--sans);
+}
+.modal-cancel:hover { border-color: var(--ink3); color: var(--ink); }
+.modal-note {
+  margin-top: 10px; font-size: 11px; color: var(--ink3); text-align: center;
+}
+
+/* ── RESPONSIVE ─────────────────────────────────────────────────────────── */
+@media (max-width: 680px) {
+  .layout { grid-template-columns: 1fr; }
+  .left-panel { height: 44vh; border-right: none; border-bottom: 1px solid var(--border); }
+  .right-panel { height: 56vh; }
+  .logo-sub { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">G</div>
+    <span class="logo-text">GazetteView</span>
+    <span class="logo-sub">OSH Rules 2026 · Form Index</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="header-api">
+    <div class="api-status-dot" id="apiDot" title="API key status"></div>
+    <button class="api-key-btn" onclick="openApiModal()" id="apiKeyBtn">Set API Key</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- ── LEFT PANEL ── -->
+  <div class="left-panel">
+    <div class="import-zone">
+      <div class="import-tabs">
+        <button class="tab-btn active" id="tabPdf" onclick="switchTab('pdf')">📄 PDF Upload</button>
+        <button class="tab-btn" id="tabText" onclick="switchTab('text')">✏️ Paste Text</button>
+      </div>
+
+      <!-- PDF tab -->
+      <div id="panelPdf">
+        <div class="drop-area" id="dropArea" onclick="document.getElementById('fileInput').click()">
+          <div class="drop-icon">⊕</div>
+          <p>Drop PDFs here or <strong>browse files</strong></p>
+          <p style="font-size:11px;margin-top:4px;color:var(--ink3)">Up to 4 Gazette PDFs</p>
+          <input type="file" id="fileInput" accept=".pdf" multiple>
+        </div>
+        <div class="file-list" id="fileList"></div>
+      </div>
+
+      <!-- Text tab -->
+      <div class="paste-area" id="panelText">
+        <textarea id="pasteInput"
+          placeholder="Paste extracted text from any Gazette PDF here…&#10;&#10;The parser will find every FORM-I … FORM-XXVII pattern automatically."></textarea>
+      </div>
+
+      <button class="parse-btn" id="parseBtn" disabled onclick="handleParse()">
+        <span id="parseBtnIcon">⚡</span> <span id="parseBtnLabel">Extract all forms</span>
+      </button>
+    </div>
+
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="searchInput"
+        placeholder="Search form, rule, or keyword…"
+        oninput="filterForms()" disabled>
+    </div>
+
+    <div class="form-index" id="formIndex">
+      <div class="form-index-empty">
+        <div class="hint-icon">📋</div>
+        Upload PDFs or paste text, then click<br><strong>Extract all forms</strong> to begin
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT PANEL ── -->
+  <div class="right-panel" id="rightPanel">
+    <div class="welcome-state">
+      <div class="w-icon">🏛️</div>
+      <h2>Select a form to explore</h2>
+      <p>Import the Gazette PDFs or paste extracted text. All statutory forms will be indexed and searchable.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── API KEY MODAL ── -->
+<div class="modal-overlay" id="apiModal">
+  <div class="modal">
+    <h3>OpenRouter API Key</h3>
+    <p>Enter your free <strong>OpenRouter</strong> API key. Your key stays in browser session memory only — never logged or sent elsewhere.</p>
+    <input type="password" id="apiKeyInput" placeholder="sk-or-v1-…" autocomplete="off">
+
+    <label style="display:block;margin-top:14px;font-size:12px;color:var(--ink2);margin-bottom:6px;font-family:var(--mono);letter-spacing:.3px">MODEL</label>
+    <select id="modelSelect" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;font-family:var(--mono);background:var(--surface);color:var(--ink);outline:none;cursor:pointer">
+      <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 8B · Free ⚡ Fastest</option>
+      <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B · Free · Smarter</option>
+      <option value="google/gemma-2-9b-it:free">Gemma 2 9B · Free</option>
+      <option value="mistralai/mistral-7b-instruct:free">Mistral 7B · Free</option>
+      <option value="deepseek/deepseek-r1:free">DeepSeek R1 · Free · Best reasoning (slow)</option>
+      <option value="microsoft/phi-3-mini-128k-instruct:free">Phi-3 Mini · Free · Lightweight</option>
+    </select>
+
+    <div class="modal-btns">
+      <button class="modal-save" onclick="saveApiKey()">Save &amp; Enable Chat</button>
+      <button class="modal-cancel" onclick="closeApiModal()">Cancel</button>
+    </div>
+    <p class="modal-note">Free key at <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--accent)">openrouter.ai/keys</a> · No credit card needed · Used only for form Q&amp;A</p>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── STATE ──────────────────────────────────────────────────────────────────────
+let allForms = [];
+let selectedForm = null;
+let chatHistory = [];
+let files = [];
+let apiKey = '';
+let selectedModel = 'meta-llama/llama-3.1-8b-instruct:free';
+let activeTab = 'pdf';
+let msgId = 0;
+
+// ── API KEY MODAL ──────────────────────────────────────────────────────────────
+function openApiModal() {
+  document.getElementById('apiKeyInput').value = apiKey;
+  document.getElementById('modelSelect').value = selectedModel;
+  document.getElementById('apiModal').classList.add('open');
+  setTimeout(() => document.getElementById('apiKeyInput').focus(), 100);
+}
+function closeApiModal() {
+  document.getElementById('apiModal').classList.remove('open');
+}
+function saveApiKey() {
+  apiKey = document.getElementById('apiKeyInput').value.trim();
+  selectedModel = document.getElementById('modelSelect').value;
+  closeApiModal();
+  updateApiStatus();
+}
+function updateApiStatus() {
+  const dot = document.getElementById('apiDot');
+  const btn = document.getElementById('apiKeyBtn');
+  if (apiKey) {
+    dot.classList.add('ready');
+    const shortModel = selectedModel.split('/').pop().replace(':free','');
+    btn.textContent = `✓ ${shortModel}`;
+  } else {
+    dot.classList.remove('ready');
+    btn.textContent = 'Set API Key';
+  }
+}
+document.getElementById('apiModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('apiModal')) closeApiModal();
+});
+document.getElementById('apiKeyInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveApiKey();
+  if (e.key === 'Escape') closeApiModal();
+});
+
+// ── TABS ───────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tabPdf').classList.toggle('active', tab === 'pdf');
+  document.getElementById('tabText').classList.toggle('active', tab === 'text');
+  document.getElementById('panelPdf').style.display = tab === 'pdf' ? '' : 'none';
+  document.getElementById('panelText').style.display = tab === 'text' ? 'block' : 'none';
+  updateParseBtn();
+}
+function updateParseBtn() {
+  const btn = document.getElementById('parseBtn');
+  if (activeTab === 'pdf') {
+    btn.disabled = files.length === 0;
+    document.getElementById('parseBtnLabel').textContent = 'Extract all forms';
+  } else {
+    const txt = document.getElementById('pasteInput').value.trim();
+    btn.disabled = txt.length === 0;
+    document.getElementById('parseBtnLabel').textContent = 'Parse pasted text';
+  }
+}
+document.getElementById('pasteInput').addEventListener('input', updateParseBtn);
+
+// ── FILE HANDLING ──────────────────────────────────────────────────────────────
+const dropArea = document.getElementById('dropArea');
+const fileInput = document.getElementById('fileInput');
+
+dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('drag-over'); });
+dropArea.addEventListener('dragleave', () => dropArea.classList.remove('drag-over'));
+dropArea.addEventListener('drop', e => {
+  e.preventDefault(); dropArea.classList.remove('drag-over');
+  handleFiles([...e.dataTransfer.files].filter(f => f.type === 'application/pdf'));
+});
+fileInput.addEventListener('change', () => handleFiles([...fileInput.files]));
+
+function handleFiles(newFiles) {
+  files = [...files, ...newFiles].slice(0, 4);
+  renderFileList();
+  updateParseBtn();
+}
+function renderFileList() {
+  const list = document.getElementById('fileList');
+  list.innerHTML = files.map((f, i) => `
+    <div class="file-item">
+      <span class="fname" title="${f.name}">${f.name}</span>
+      <span class="fstatus ready" id="fstatus-${i}">ready</span>
+    </div>
+  `).join('');
+}
+
+// ── PARSE DISPATCH ─────────────────────────────────────────────────────────────
+async function handleParse() {
+  if (activeTab === 'pdf') await parsePDFs();
+  else parsePastedText();
+}
+
+// ── PDF PARSING ────────────────────────────────────────────────────────────────
+async function parsePDFs() {
+  const btn = document.getElementById('parseBtn');
+  btn.disabled = true;
+  document.getElementById('parseBtnLabel').textContent = 'Extracting…';
+  allForms = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const statusEl = document.getElementById(`fstatus-${i}`);
+    statusEl.textContent = 'reading…'; statusEl.className = 'fstatus loading';
+    try {
+      const text = await extractPDFText(files[i]);
+      const forms = parseFormsFromText(text, files[i].name);
+      allForms = [...allForms, ...forms];
+      statusEl.textContent = `${forms.length} forms`; statusEl.className = 'fstatus done';
+    } catch (e) {
+      statusEl.textContent = 'error'; statusEl.className = 'fstatus error';
+      console.error(e);
+    }
+  }
+  finalizeForms();
+  btn.disabled = false;
+  document.getElementById('parseBtnLabel').textContent = 'Extract all forms';
+}
+
+async function extractPDFText(file) {
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  let text = '';
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    // Group items by approximate Y position to reconstruct lines
+    const items = content.items;
+    const lineMap = {};
+    for (const item of items) {
+      const y = Math.round(item.transform[5]);
+      if (!lineMap[y]) lineMap[y] = [];
+      lineMap[y].push(item.str);
+    }
+    const sortedYs = Object.keys(lineMap).map(Number).sort((a, b) => b - a);
+    for (const y of sortedYs) text += lineMap[y].join(' ') + '\n';
+    text += '\n';
+  }
+  return text;
+}
+
+// ── TEXT PASTE PARSING ─────────────────────────────────────────────────────────
+function parsePastedText() {
+  const text = document.getElementById('pasteInput').value;
+  if (!text.trim()) return;
+  allForms = parseFormsFromText(text, 'pasted text');
+  finalizeForms();
+}
+
+// ── CORE PARSER ────────────────────────────────────────────────────────────────
+// Handles both clean patterns and PDF-extracted (possibly joined) text.
+function parseFormsFromText(text, sourceName) {
+  const forms = [];
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Match FORM-I, FORM II, FORM-XXVII, FORM-I-A, etc.
+    const formMatch = line.match(/^FORM[\s\-–—]*([IVXLCDM]+(?:[-–][A-Z])?)\s*$/i);
+    // Also try lines that start with FORM followed by number (short lines)
+    const formMatchInline = !formMatch && line.match(/^FORM[\s\-–—]*([IVXLCDM]+(?:[-–][A-Z])?)\b/i) && line.length < 30
+      ? line.match(/^FORM[\s\-–—]*([IVXLCDM]+(?:[-–][A-Z])?)\b/i)
+      : null;
+
+    const match = formMatch || formMatchInline;
+
+    if (match) {
+      const numStr = match[1].toUpperCase().replace(/[\s–—]+/g, '-');
+      const number = 'FORM-' + numStr;
+      let rule = '', description = '';
+      let contextLines = [line];
+      let j = i + 1;
+
+      // Scan ahead up to 10 lines for rule reference and description
+      while (j < Math.min(i + 12, lines.length)) {
+        const next = lines[j];
+        contextLines.push(next);
+
+        // Rule pattern: (See rule 3(1)) or [See rules 3(1) and 4(2)] etc.
+        if (!rule) {
+          const rm = next.match(/[\[\(]?\s*[Ss]ee\s+[Rr]ules?\s+([^)\]]{1,140})[\]\)]?/);
+          if (rm) {
+            rule = rm[1].trim().replace(/[\[\]()]/g, '').replace(/\s+/g, ' ');
+          }
+        }
+
+        // Description: a meaningful line that isn't a form/rule/header
+        if (!description && next.length > 15) {
+          const isHeader = /^FORM[\s\-–—]/i.test(next)
+            || /^See\s+[Rr]ule/i.test(next)
+            || /^\[?[Ss]ee\s/i.test(next)
+            || /^THE GAZETTE/i.test(next)
+            || /^PART\s/i.test(next)
+            || /^\[PART/i.test(next)
+            || /^MINISTRY/i.test(next)
+            || /^CHAPTER/i.test(next)
+            || /^\d+\.\s/i.test(next);
+          if (!isHeader) {
+            description = next.replace(/^[\[\(]|[\]\)]$/g, '').trim();
+          }
+        }
+
+        if (rule && description) break;
+        j++;
+      }
+
+      // Grab more context (up to 40 lines)
+      const fullContext = lines.slice(i, Math.min(i + 40, lines.length)).join('\n');
+
+      forms.push({
+        number,
+        rule: rule || '',
+        description: description || '',
+        sortKey: romanToInt(numStr.split('-')[0]),
+        context: fullContext,
+        source: sourceName
+      });
+
+      i = j;
+    } else {
+      i++;
+    }
+  }
+
+  // Deduplicate within this source
+  const seen = new Set();
+  return forms.filter(f => {
+    if (seen.has(f.number)) return false;
+    seen.add(f.number); return true;
+  });
+}
+
+function romanToInt(s) {
+  const vals = { I:1, V:5, X:10, L:50, C:100, D:500, M:1000 };
+  let n = 0, prev = 0;
+  for (const c of (s || '').toUpperCase().split('').reverse()) {
+    const v = vals[c] || 0;
+    n += v < prev ? -v : v;
+    prev = v;
+  }
+  return n;
+}
+
+// ── FINALIZE ───────────────────────────────────────────────────────────────────
+function finalizeForms() {
+  // Global dedup by number
+  const seen = new Set();
+  allForms = allForms.filter(f => {
+    if (seen.has(f.number)) return false;
+    seen.add(f.number); return true;
+  });
+  allForms.sort((a, b) => a.sortKey - b.sortKey || a.number.localeCompare(b.number));
+  document.getElementById('searchInput').disabled = false;
+  renderFormIndex(allForms);
+}
+
+// ── FORM INDEX RENDER ──────────────────────────────────────────────────────────
+function renderFormIndex(forms) {
+  const el = document.getElementById('formIndex');
+  if (!forms.length) {
+    el.innerHTML = '<div class="form-index-empty"><div class="hint-icon">🔍</div>No forms matched your search</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="stats-bar">
+      <span>${forms.length} form${forms.length !== 1 ? 's' : ''} indexed</span>
+      <span>${files.length} PDF${files.length !== 1 ? 's' : ''}</span>
+    </div>
+    ${forms.map(f => `
+      <div class="form-entry ${selectedForm?.number === f.number ? 'active' : ''}"
+           onclick="selectForm('${f.number}')" id="entry-${f.number.replace(/[^A-Z0-9]/g,'_')}">
+        <div class="form-num">${f.number}</div>
+        ${f.rule ? `<div class="form-rule">See rule ${f.rule}</div>` : ''}
+        <div class="form-title">${f.description || '—'}</div>
+      </div>
+    `).join('')}
+  `;
+}
+
+function filterForms() {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  if (!q) { renderFormIndex(allForms); return; }
+  const filtered = allForms.filter(f =>
+    f.number.toLowerCase().includes(q) ||
+    f.rule.toLowerCase().includes(q) ||
+    f.description.toLowerCase().includes(q)
+  );
+  renderFormIndex(filtered);
+}
+
+// ── FORM DETAIL ────────────────────────────────────────────────────────────────
+function selectForm(formNumber) {
+  selectedForm = allForms.find(f => f.number === formNumber);
+  chatHistory = [];
+  if (!selectedForm) return;
+
+  // Highlight active entry
+  document.querySelectorAll('.form-entry').forEach(el => {
+    el.classList.toggle('active', el.querySelector('.form-num')?.textContent === formNumber);
+  });
+
+  const hasKey = Boolean(apiKey);
+  const panel = document.getElementById('rightPanel');
+  panel.innerHTML = `
+    <div class="detail-header">
+      <span class="form-badge">${selectedForm.number}</span>
+      <h2>${selectedForm.description || 'Form details'}</h2>
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-top:6px">
+        ${selectedForm.rule ? `<span class="rule-tag">📌 See rule ${selectedForm.rule}</span>` : ''}
+        ${selectedForm.source ? `<span class="source-tag">${selectedForm.source}</span>` : ''}
+      </div>
+    </div>
+
+    <div class="ai-chat">
+      <div class="messages" id="messages">
+        <div class="msg assistant">
+          <div class="msg-label">Assistant</div>
+          <div class="msg-bubble">
+            Context for <strong>${selectedForm.number}</strong> is loaded.
+            ${selectedForm.rule ? `This form is governed by <strong>Rule ${selectedForm.rule}</strong>.` : ''}
+            Ask me anything — who fills this, what information is required, how it relates to other rules, or anything else.
+          </div>
+        </div>
+      </div>
+
+      ${!hasKey ? `
+        <div class="no-key-notice">
+          ⚠️ No API key set — <button onclick="openApiModal()" style="background:none;border:none;cursor:pointer;color:inherit;text-decoration:underline;font-size:inherit">click here</button> to add your Claude key and enable Q&amp;A.
+        </div>
+      ` : ''}
+
+      <div class="suggestion-chips" id="chips">
+        <span class="chip" onclick="askChip('What is this form used for?')">What is it used for?</span>
+        <span class="chip" onclick="askChip('Who is required to fill this form and when?')">Who fills it?</span>
+        <span class="chip" onclick="askChip('What information and fields does this form contain?')">What fields does it have?</span>
+        <span class="chip" onclick="askChip('What does the referenced rule require?')">What does the rule require?</span>
+        <span class="chip" onclick="askChip('What penalties apply if this form is not submitted?')">Penalties for non-submission?</span>
+      </div>
+
+      <div class="chat-input-row">
+        <textarea id="chatInput" placeholder="Ask about ${selectedForm.number}…" rows="1"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
+          oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()" ${!hasKey ? 'disabled title="Set API key first"' : ''}>
+          Send ↑
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function askChip(q) {
+  if (!apiKey) { openApiModal(); return; }
+  document.getElementById('chatInput').value = q;
+  sendMessage();
+}
+
+// ── AI CHAT ────────────────────────────────────────────────────────────────────
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const q = input.value.trim();
+  if (!q || !selectedForm) return;
+  if (!apiKey) { openApiModal(); return; }
+
+  input.value = ''; input.style.height = 'auto';
+  document.getElementById('sendBtn').disabled = true;
+  const chips = document.getElementById('chips');
+  if (chips) chips.style.display = 'none';
+
+  appendMsg('user', escHtml(q));
+
+  const thinkingId = appendMsg('assistant', `
+    <div class="thinking">
+      <div class="thinking-dots"><span></span><span></span><span></span></div>
+      Consulting…
+    </div>`);
+
+  chatHistory.push({ role: 'user', content: q });
+
+  const systemPrompt = `You are a precise legal assistant specialising in Indian labour law — specifically the Occupational Safety, Health and Working Conditions (Central) Rules, 2026 (notified under the OSH Code, 2020).
+
+The user is asking about ${selectedForm.number}${selectedForm.rule ? ` (See rule ${selectedForm.rule})` : ''}.
+
+FORM DESCRIPTION: ${selectedForm.description || 'Not available'}
+
+EXTRACTED GAZETTE CONTEXT:
+---
+${selectedForm.context}
+---
+
+Answer concisely and accurately. Use plain, professional language. If you quote rule numbers, be precise. If information is not in the context, say so and draw on your knowledge of the OSH Code 2020 framework. Use bullet points or numbered lists where helpful. Do not add fictional content.`;
+
+  try {
+    // OpenRouter — OpenAI-compatible endpoint, free models, CORS allowed
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': window.location.href,
+        'X-Title': 'GazetteView — OSH Forms Index'
+      },
+      body: JSON.stringify({
+        model: selectedModel,
+        max_tokens: 1024,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...chatHistory
+        ]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${res.status} — check your API key`);
+    }
+
+    const data = await res.json();
+    const answer = data.choices?.[0]?.message?.content || 'No response received.';
+    chatHistory.push({ role: 'assistant', content: answer });
+    updateMsg(thinkingId, formatMarkdown(answer));
+  } catch (e) {
+    updateMsg(thinkingId, `<span style="color:var(--err-c)">⚠ ${escHtml(e.message || 'Request failed. Check your OpenRouter key.')}</span>`);
+  }
+
+  const sendBtn = document.getElementById('sendBtn');
+  if (sendBtn) sendBtn.disabled = false;
+}
+
+// Simple markdown → HTML
+function formatMarkdown(text) {
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>')
+    .replace(/^\s*[-•]\s+(.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+    .replace(/^\s*(\d+)\.\s+(.+)$/gm, '<li>$2</li>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^/, '<p>').replace(/$/, '</p>');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function appendMsg(role, html) {
+  const id = 'msg-' + (++msgId);
+  const msgs = document.getElementById('messages');
+  msgs.insertAdjacentHTML('beforeend', `
+    <div class="msg ${role}" id="${id}">
+      <div class="msg-label">${role === 'user' ? 'You' : 'Assistant'}</div>
+      <div class="msg-bubble">${html}</div>
+    </div>
+  `);
+  msgs.scrollTop = msgs.scrollHeight;
+  return id;
+}
+
+function updateMsg(id, html) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.querySelector('.msg-bubble').innerHTML = html;
+    const msgs = document.getElementById('messages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  }
+}
+</script>
+</body>
+</html>
